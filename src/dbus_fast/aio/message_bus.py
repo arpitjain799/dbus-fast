@@ -105,6 +105,15 @@ class _MessageWriter:
 
     def _write_without_remove_writer(self):
         """Call the write callback without removing the writer."""
+        try:
+            asyncio.get_running_loop()
+            in_loop = True
+        except RuntimeError:
+            in_loop = False
+
+        if not in_loop:
+            raise RuntimeError("Must be called from within the event loop")
+
         self.write_callback(remove_writer=False)
 
     def schedule_write(self, msg: Message = None, future=None):
