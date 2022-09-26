@@ -25,6 +25,8 @@ from ..message_bus import BaseMessageBus
 from ..service import ServiceInterface
 from .proxy_object import ProxyObject
 
+_LOGGER = logging.getLogger(__name__)
+
 
 def _future_set_exception(fut: asyncio.Future, exc: Exception) -> None:
     if fut is not None and not fut.done():
@@ -77,6 +79,7 @@ class _MessageWriter:
                 else:
                     self.offset += self.sock.send(self.buf[self.offset :])
 
+                _LOGGER.warning("Checking offset [%s] buf [%s]", self.offset, self.buf)
                 if self.offset >= len(self.buf):
                     # finished writing
                     self.buf = None
