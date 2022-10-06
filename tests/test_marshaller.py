@@ -161,6 +161,11 @@ def test_unmarshall_can_resume():
             self.pos += 1
             return data
 
+        def readinto(self, target) -> bytes:
+            data = self.data[self.pos : self.pos + 1]
+            self.pos += 1
+            target[0] = data[0]
+
     stream = SlowStream()
     unmarshaller = Unmarshaller(stream)
 

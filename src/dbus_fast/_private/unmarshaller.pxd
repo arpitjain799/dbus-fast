@@ -21,7 +21,8 @@ cdef class Unmarshaller:
     cdef object _unix_fds
     cdef bytearray _buf
     cdef object _view
-    cdef unsigned int _pos
+    cdef unsigned long _stream_pos
+    cdef unsigned long _pos
     cdef object _stream
     cdef object _sock
     cdef object _message
@@ -42,6 +43,14 @@ cdef class Unmarshaller:
         start_len=cython.ulong,
         missing_bytes=cython.ulong
     )
+    cdef read_to_pos_stream(self, unsigned long pos)
+
+    @cython.locals(
+        start_len=cython.ulong,
+        missing_bytes=cython.ulong
+    )
+    cdef read_to_pos_sock(self, unsigned long pos)
+
     cdef read_to_pos(self, unsigned long pos)
 
     cpdef read_uint32_cast(self, object type_)

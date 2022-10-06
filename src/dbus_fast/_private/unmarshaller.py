@@ -133,6 +133,7 @@ class Unmarshaller:
         "_buf",
         "_view",
         "_pos",
+        "_stream_pos",
         "_stream",
         "_sock",
         "_message",
@@ -148,13 +149,17 @@ class Unmarshaller:
 
     def __init__(self, stream: socket.SocketIO, sock=None):
         self._unix_fds: List[int] = []
-        self._buf = bytearray()  # Actual buffer
+        if sock:
+            self._buf = bytearray()  # Actual buffer
+        else:
+            self._buf = bytearray(HEADER_SIGNATURE_SIZE)
         self._view = None  # Memory view of the buffer
         self._stream = stream
         self._sock = sock
         self._message: Message | None = None
         self._readers: Dict[str, READER_TYPE] = {}
         self._pos = 0
+        self._stream_pos = 0
         self._body_len = 0
         self._serial = 0
         self._header_len = 0
@@ -171,9 +176,13 @@ class Unmarshaller:
         """
         self._unix_fds: List[int] = []
         self._view = None
-        self._buf.clear()
+        if self._sock:
+            self._buf = bytearray()  # Actual buffer
+        else:
+            self._buf = bytearray(HEADER_SIGNATURE_SIZE)
         self._message = None
         self._pos = 0
+        self._stream_pos = 0
         self._body_len = 0
         self._serial = 0
         self._header_len = 0
@@ -209,6 +218,32 @@ class Unmarshaller:
 
         return msg
 
+    def read_to_pos_stream(self, pos) -> None:
+        """Reads from the stream until the given position is reached."""
+        start_len = self._stream_pos
+        missing_buffer = pos - len(self._buf)
+        if missing_buffer > 0:
+            self._buf.extend(b"\0" * missing_buffer)
+        read = self._stream.readinto(memoryview(self._buf)[start_len:])
+        if read == 0:
+            raise EOFError()
+        elif read is None:
+            raise MarshallerStreamEndError()
+        self._stream_pos += read
+
+    def read_to_pos_sock(self, pos) -> None:
+        """Reads from the socket until the given position is reached."""
+        start_len = len(self._buf)
+        missing_bytes = pos - (start_len - self._pos)
+        data = self.read_sock(missing_bytes)
+        if data == b"":
+            raise EOFError()
+        if data is None:
+            raise MarshallerStreamEndError()
+        self._buf.extend(data)
+        if len(data) + start_len != pos:
+            raise MarshallerStreamEndError()
+
     def read_to_pos(self, pos) -> None:
         """
         Read from underlying socket into buffer.
@@ -222,19 +257,10 @@ class Unmarshaller:
         :returns:
             None
         """
-        start_len = len(self._buf)
-        missing_bytes = pos - (start_len - self._pos)
-        if self._sock is None:
-            data = self._stream.read(missing_bytes)
+        if self._sock is not None:
+            self.read_to_pos_sock(pos)
         else:
-            data = self.read_sock(missing_bytes)
-        if data == b"":
-            raise EOFError()
-        if data is None:
-            raise MarshallerStreamEndError()
-        self._buf.extend(data)
-        if len(data) + start_len != pos:
-            raise MarshallerStreamEndError()
+            self.read_to_pos_stream(pos)
 
     def read_uint32_cast(self, type_: SignatureType) -> Any:
         self._pos += UINT32_SIZE + (-self._pos & (UINT32_SIZE - 1))  # align
